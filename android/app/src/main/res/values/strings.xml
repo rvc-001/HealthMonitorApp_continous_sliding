@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">PPG PWA</string>
+    <string name="title_activity_main">PPG PWA</string>
+    <string name="package_name">com.yourdomain.ppgpwa</string>
+    <string name="custom_url_scheme">com.yourdomain.ppgpwa</string>
+</resources>
