@@ -13,4 +13,4 @@ function run(command, args) {
 }
 
 run('npx', ['next', 'build', '--webpack']);
-run('npx', ['@capacitor/cli@8.4.2', 'cap', 'sync']);
+run('npx', ['cap', 'sync']);

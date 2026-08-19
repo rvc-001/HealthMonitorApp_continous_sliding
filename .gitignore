@@ -10,6 +10,17 @@
 /.next/
 /out/
 
+# Android / Gradle
+/android/.gradle/
+/android/local.properties
+/.gradle-cache/
+/.gradle-home/
+/.gradle-run/
+/.gradle-run2/
+/android/.gradle-cache/
+/.m2repo/
+sdk-yes.txt
+
 # production
 /build
 
