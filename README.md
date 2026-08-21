@@ -1,5 +1,8 @@
 # Signal Monitor - Physiological Signal Acquisition & ML Inference PWA
 
+**Live Demo:** [https://health-monitor-app-continous-slidin.vercel.app/](https://health-monitor-app-continous-slidin.vercel.app/)
+*(Available directly in browser as an installable PWA, or as an Android APK via capacitor)*
+
 A medical-grade Progressive Web App (PWA) and cross-platform mobile app (via Capacitor) designed for real-time physiological signal acquisition, continuous monitoring, and ML-based prediction of Blood Pressure (Systolic and Diastolic) and Glucose levels using remote photoplethysmography (rPPG).
 
 ## Key Capabilities
