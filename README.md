@@ -1,222 +1,114 @@
-# Signal Monitor - Physiological Signal Acquisition PWA
+# Signal Monitor - Physiological Signal Acquisition & ML Inference PWA
 
-A medical-grade Progressive Web App (PWA) for physiological signal acquisition, analysis, and ML-based blood pressure prediction, aligned with MIMIC-III data standards.
+A medical-grade Progressive Web App (PWA) and cross-platform mobile app (via Capacitor) designed for real-time physiological signal acquisition, continuous monitoring, and ML-based prediction of Blood Pressure (Systolic and Diastolic) and Glucose levels using remote photoplethysmography (rPPG).
 
-## Features
+## Key Capabilities
 
-### 1. Recording Tab
-- **Camera Integration**: Remote photoplethysmography (rPPG) signal acquisition from camera feed
-- **Real-time Visualization**: Live graphing of raw and filtered signals side-by-side
-- **Patient Information**: Optional patient ID and name capture for record keeping
-- **Simulated Signal Mode**: Falls back to realistic simulated signal data if camera unavailable
-- **Offline Recording**: Full offline capability with IndexedDB storage
+### 1. Real-Time Physiological Inference
+- **Classical ML Pipeline:** Utilizes ONNX Runtime Web (`onnxruntime-web`) to run customized classical machine learning models (e.g., Polynomial feature extraction, StandardScaler) entirely client-side.
+- **Multi-Target Prediction:** Supports real-time prediction of Systolic Blood Pressure (SBP), Diastolic Blood Pressure (DBP), and Glucose levels.
+- **Continuous Monitoring:** Processes 12-second rolling signal segments with dynamic progress tracking.
+- **Smart Fallbacks:** Implements physiological heuristics (e.g., relying on reflection index, augmentation index, and stiffness index) to estimate values when ML predictions collapse across changing inputs.
+- **Live Classification:** Visually categorizes BP readings into standard clinical stages (Normal, Elevated, Stage 1 HT, Stage 2 HT).
 
-### 2. History Tab
-- **Session Management**: Browse all recorded physiological sessions
-- **Session Details**: View recording metadata (patient, duration, sampling rate, filters applied)
-- **Signal Visualization**: Review raw and filtered signals from previous recordings
-- **Clipping**: Select specific time ranges within recordings for export
-- **Signal Statistics**: Calculate and display min, max, mean, and standard deviation
-- **MIMIC-III CSV Export**: Export data in clinical-grade format with proper headers
+### 2. Signal Acquisition & Recording
+- **rPPG Camera Integration:** Non-contact physiological signal acquisition by extracting the green channel from a live camera feed.
+- **Simulation Mode:** Provides realistic synthetic signal data for testing when a camera is unavailable.
+- **Live Visualization:** Real-time dual-graph visualization of raw camera signals vs. bandpass-filtered signals.
+- **Filtering:** High-performance Butterworth bandpass filtering (customizable cutoffs and order) to isolate physiological frequencies and remove DC offset/noise.
 
-### 3. Model Tab
-- **Model Upload**: Support for PyTorch (.pth), Pickle (.pkl), ONNX, TensorFlow, and other ML formats
-- **Model Assumptions**: Explicit UI for confirming model expectations (filtered signal, sampling rate, window length)
-- **Inference Interface**: Run trained models against filtered signal data
-- **Blood Pressure Prediction**: Predict Systolic (SBP) and Diastolic (DBP) from physiological signals
-- **Results Comparison**: Compare predictions against reference values with error metrics
-- **Export Results**: Download inference results as CSV
+### 3. Patient Data & History
+- **MIMIC-III Standardized Export:** Ensures that collected data aligns with the MIMIC-III waveform conventions, including timestamp-based sampling, standard formatting, and metadata headers.
+- **Offline Storage:** Full offline capability leveraging IndexedDB for secure, local persistence of recorded sessions.
+- **Session Management:** Browse past sessions, review raw/filtered signals, compute statistical summaries (Min, Max, Mean, Std Dev), and selectively clip time ranges for CSV export.
 
-### 4. Settings Tab
-- **Signal Processing Configuration**: Adjust bandpass filter parameters
-  - Low/High frequency cutoffs (Hz)
-  - Butterworth filter order
-  - Sampling rate (fixed to recording rate)
-- **Graph Preferences**: Grid display and auto-scaling options
-- **Data Management**: Clear all local recordings with confirmation
-- **Theme Control**: Dark mode (default for clinical environment)
+### 4. Cross-Platform App
+- **PWA Ready:** Installable on Desktop and Mobile browsers, complete with a Service Worker for offline operation and network-first caching.
+- **Native Android & iOS:** Configured with Capacitor (`@capacitor/core`, `@capacitor/android`) for native device deployment.
 
-## Technical Stack
+---
 
-### Frontend
-- **Framework**: Next.js 16 with React 19
-- **Styling**: Tailwind CSS v4 with custom design tokens
-- **UI Components**: shadcn/ui
-- **Charts**: Canvas-based custom signal visualization (Recharts compatible)
+## Technical Architecture
 
-### Signal Processing
-- **Butterworth Filtering**: Bandpass filtering for noise removal
-- **rPPG Extraction**: Green channel analysis from camera frames
-- **Statistics**: Min, max, mean, std deviation calculations
-- **MIMIC-III Alignment**: Timestamp, sampling rate, and CSV format compatibility
+### Frontend Stack
+- **Framework:** Next.js 16 (App router) and React 19.
+- **Styling:** Tailwind CSS v4 with custom dark-mode aesthetics for clinical environments.
+- **UI Components:** Built on top of `shadcn/ui`, utilizing `radix-ui` primitives.
+- **Icons:** `lucide-react`.
 
-### Storage & Offline
-- **Database**: IndexedDB for offline-capable data persistence
-- **Service Worker**: Network-first caching with offline fallback
-- **PWA Manifest**: Full installability on Android and iOS
+### Signal Processing & ML Stack
+- **Inference Engine:** `onnxruntime-web` running WASM for high-performance, client-side ML evaluation without server dependencies.
+- **Signal Processing:** Custom C2D-based rendering and Butterworth filter implementations for real-time signal analysis.
+- **Data Math:** `fili` for advanced digital filtering algorithms.
 
-## Architecture
-
-```
+### Project Structure
+```text
+/app               - Next.js application routing
 /components
-  /navigation      - Bottom tab navigation
-  /tabs            - Tab content (Recording, History, Model, Settings)
-  /visualization   - Signal visualizers
-  /pwa             - PWA registration
-
+  ├── /navigation  - Bottom tab navigation for mobile interfaces
+  ├── /tabs        - Core application views (Recording, History, Model, Settings)
+  └── /visualization - Real-time signal graphs and BP live monitoring
 /lib
-  /signal-processing.ts  - Core signal algorithms, storage
-  /camera-utils.ts       - Camera access, rPPG extraction
-  /app-context.ts        - Global app settings
-
+  ├── signal-processing.ts       - Core algorithms for rPPG and filtering
+  └── classical-models-pipeline.ts - ONNX execution spec and feature mapping
 /public
-  /manifest.json   - PWA manifest
-  /sw.js          - Service worker (offline support)
+  ├── /models      - Hosted ONNX models and weights (.onnx, .onnx.data)
+  ├── manifest.json - PWA manifest
+  └── sw.js        - Offline Service Worker
 ```
 
-## Data Format
+---
 
-### RecordingSession (Internal)
-```typescript
-{
-  id: string;
-  patientId?: string;
-  patientName?: string;
-  startTime: number;          // Timestamp in milliseconds
-  endTime?: number;
-  samplingRate: number;       // Hz
-  rawSignal: Array<{
-    timestamp: number;
-    value: number;
-  }>;
-  filterConfig: FilterConfig;
-  createdAt: Date;
-}
+## Getting Started
+
+### Prerequisites
+- Node.js 18+ (Node 20+ recommended)
+- npm or pnpm
+
+### Installation
+
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+2. Run the development server:
+   ```bash
+   npm run dev
+   ```
+
+3. Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### Native Build (Capacitor)
+To sync your web assets to the native Android project:
+```bash
+npm run build
+npx cap sync android
+npx cap open android
 ```
 
-### CSV Export (MIMIC-III Format)
-```
-# MIMIC-III Signal Export
-# Patient ID: P12345
-# Patient Name: John Doe
-# Start Time: 2026-01-22T10:30:00Z
-# Sampling Rate: 30 Hz
-# Filter: Butterworth Bandpass 0.5-50 Hz, Order 4
+---
 
-Time(s),Raw Signal,Filtered Signal
-0.0000,0.1234,0.0456
-0.0333,0.1567,0.0789
-...
-```
+## Usage Guide
 
-## Signal Processing Pipeline
+1. **Recording Data:**
+   Navigate to the Recording tab. Grant camera permissions. The app will extract the rPPG signal from your fingertip over the camera lens. You can also run the app in simulated mode for testing.
 
-1. **Acquisition**: 30 Hz sampling from camera (rPPG) or simulation
-2. **Raw Signal**: Unmodified green channel values (-1 to 1 normalized)
-3. **Preprocessing**: DC offset removal (mean subtraction)
-4. **Filtering**: Butterworth bandpass filter (default 0.5-50 Hz, order 4)
-5. **Output**: Filtered signal ready for ML inference
+2. **Monitoring Results:**
+   Once recording starts, the ML pipeline aggregates data into 12-second rolling segments. Extracted features (72 base features mapped into 15 polynomial features) are passed to the ONNX models to output SBP, DBP, and Glucose estimates.
 
-## Usage
+3. **Data Review & Export:**
+   Go to the History tab to review past sessions. You can trim the data and export it as a MIMIC-III compatible CSV file.
 
-### Recording a Session
-1. Navigate to Recording tab
-2. Grant camera permission (or use simulated mode)
-3. Enter patient ID or name
-4. Click "Start Recording"
-5. View real-time raw and filtered signal graphs
-6. Click "Stop Recording" to finalize
+4. **Model Configuration:**
+   In the Model tab, review the assumptions made by the ML models or upload custom `.pth`, `.pkl`, or `.onnx` models if extending the platform.
 
-### Reviewing Sessions
-1. Navigate to History tab
-2. Select a session from the list
-3. View full signal visualization and statistics
-4. Optionally clip to specific time range
-5. Export as CSV
+---
 
-### ML Inference
-1. Navigate to Model tab
-2. Upload a trained model (.pth, .pkl, .onnx, etc.)
-3. Review and confirm model assumptions
-4. Select a recorded session
-5. Run inference to get SBP/DBP predictions
-6. Compare against reference values
-7. Export results
-
-## PWA Installation
-
-### Android
-1. Open app in Chrome
-2. Tap menu → "Install app" or "Add to Home screen"
-3. Confirm installation
-
-### iOS (Web Clip)
-1. Open app in Safari
-2. Tap share → "Add to Home Screen"
-3. Confirm addition
-
-### Desktop
-1. Open app in Chrome/Edge
-2. Click install icon in address bar
-3. Confirm installation
-
-## Offline Capabilities
-
-- **Full Recording**: Record sessions without network connection
-- **Signal Visualization**: View stored sessions offline
-- **Data Export**: Generate CSV exports without internet
-- **Model Inference**: Run models offline (model already downloaded)
-- **Automatic Sync**: Data syncs when connection restored
-
-## MIMIC-III Compliance
-
-This app follows MIMIC-III waveform conventions:
-- ✓ Timestamp-based sampling
-- ✓ Fixed sampling rates (30 Hz default)
-- ✓ Signal normalization
-- ✓ CSV export format with metadata headers
-- ✓ Patient identification support
-- ✓ Filter configuration tracking
-
-## Security & Privacy
-
-- **Local Storage**: All data stored in browser IndexedDB only
-- **No Server Upload**: Option to export data, but not automatic
-- **Patient Privacy**: Patient ID/name stored locally only
-- **HTTPS Required**: PWA requires HTTPS (or localhost)
-
-## Performance Optimization
-
-- **Canvas Rendering**: Efficient C2D-based signal visualization
-- **Lazy Loading**: Components load on demand
-- **Data Pagination**: Large session lists paginated
-- **Memory Management**: Signal buffers cleared after processing
-- **Service Worker Caching**: Optimal cache strategies
-
-## Browser Support
-
-- Chrome 90+
-- Firefox 88+
-- Safari 14+ (iOS 14.5+)
-- Edge 90+
-
-## Future Enhancements
-
-- [ ] Real-time heart rate extraction from PPG
-- [ ] Multi-model inference with ensemble averaging
-- [ ] Cloud sync option with opt-in
-- [ ] Advanced signal preprocessing (artifact removal)
-- [ ] Data sharing with healthcare providers
-- [ ] Notification system for abnormal readings
-- [ ] TensorFlow.js model support
-- [ ] Real-time video analysis improvements
+## Security and Privacy
+- **Client-Side Only:** No data is sent to a server. Camera feeds are processed entirely in memory. ML inference happens directly within the browser using WASM.
+- **Local Storage:** Patient details and signals are stored only on the device via IndexedDB.
+- **Offline By Default:** Works in environments without internet access once the PWA is installed.
 
 ## License
-
-Clinical research and medical device development purposes.
-
-## References
-
-- MIMIC-III Dataset: https://mimic.physionet.org/
-- Remote PPG (rPPG): IEEE Transactions on Biomedical Engineering
-- Butterworth Filter: Signal Processing literature
+Designed for clinical research, physiological data collection, and medical device development purposes. Ensure adherence to local regulatory standards when utilizing this software for actual patient monitoring.
