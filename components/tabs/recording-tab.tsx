@@ -150,32 +150,25 @@ export default function RecordingTab() {
         v.muted = true;
         v.playsInline = true;
         v.setAttribute('webkit-playsinline', '');
+        v.autoplay = true;
         v.srcObject = null;
         v.srcObject = stream;
-
-        // Wait for metadata before playing; avoids sporadic AbortError races.
-        await new Promise<void>((resolve) => {
-          const onMeta = () => {
-            v.removeEventListener('loadedmetadata', onMeta);
-            resolve();
-          };
-          v.addEventListener('loadedmetadata', onMeta, { once: true });
-          // If metadata is already there, resolve immediately.
-          if (v.readyState >= 1) {
-            v.removeEventListener('loadedmetadata', onMeta);
-            resolve();
-          }
-        });
-
         if (cameraInitTokenRef.current !== myToken) return;
 
         try {
+          // Start playback as soon as the live stream is attached. Waiting for
+          // loadedmetadata first can stall indefinitely on iOS Safari streams.
           await v.play();
         } catch (e: any) {
-          // AbortError is common when the UA cancels play during rapid re-inits; ignore it.
-          if (e?.name !== 'AbortError') {
-            console.error("Play error", e);
+          if (cameraInitTokenRef.current !== myToken) return;
+          if (e?.name === 'AbortError') {
+            // A superseding camera init may cancel playback; its request owns the preview.
+            return;
           }
+          console.error("Play error", e);
+          setStatusMsg("Camera Error");
+          setCameraError("The camera is available, but Safari could not start the preview. Tap Retry Camera.");
+          return;
         }
         if (torchTimeoutRef.current) clearTimeout(torchTimeoutRef.current);
         torchTimeoutRef.current = setTimeout(() => {
@@ -613,7 +606,7 @@ export default function RecordingTab() {
 
       {/* Video Preview */}
       <div className="relative h-48 bg-black rounded-lg overflow-hidden shadow-md">
-        <video ref={videoRef} muted playsInline className="w-full h-full object-cover" />
+        <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
         {(statusMsg === "Camera Error" || cameraError) && (
           <div className="absolute inset-0">
             <div className="absolute inset-0 bg-gradient-to-br from-slate-950/95 via-slate-950/75 to-slate-900/95" />
