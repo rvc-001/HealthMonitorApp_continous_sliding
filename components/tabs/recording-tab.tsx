@@ -254,8 +254,28 @@ export default function RecordingTab() {
 
           if (quality === 'saturated') {
             setStatusMsg("Too much pressure / overexposed");
+            recordedSamplesRef.current = [];
+            visualBufferRef.current = [];
+            recordingStartRef.current = null;
+            bpSegmentWindowStartRef.current = null;
+            lastAnalysisMsRef.current = null;
+            setVisRaw([]);
+            setRecordingTime(0);
+            setBpSegmentProgress(0);
+            setBpCurrentSegment(0);
           } else if (quality === 'no_contact') {
-            setStatusMsg("No finger detected / flash off");
+            setStatusMsg("Finger not detected — cover the camera and flash");
+            // Discard the partial window so estimates can never bridge a gap
+            // where the camera was not covered by a finger.
+            recordedSamplesRef.current = [];
+            visualBufferRef.current = [];
+            recordingStartRef.current = null;
+            bpSegmentWindowStartRef.current = null;
+            lastAnalysisMsRef.current = null;
+            setVisRaw([]);
+            setRecordingTime(0);
+            setBpSegmentProgress(0);
+            setBpCurrentSegment(0);
           } else {
             // quality === 'ok' — only valid samples enter the buffer
             // Anchor the recording clock on the first good-quality frame
@@ -519,6 +539,18 @@ export default function RecordingTab() {
                 <button onClick={startRecording} className="w-full py-3 bg-primary text-primary-foreground rounded-lg font-bold text-lg shadow hover:opacity-90">Confirm & Start</button>
             </div>
         </div>
+      )}
+
+      {!isRecording && (
+        <section className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-2" aria-labelledby="recording-guide-title">
+          <h2 id="recording-guide-title" className="text-sm font-semibold">How this recording works</h2>
+          <ol className="list-decimal pl-5 text-xs text-muted-foreground space-y-1">
+            <li>Place your fingertip over the rear camera and flash, then keep it still.</li>
+            <li>The app checks for a finger and waits through a 5-second settling period.</li>
+            <li>Valid pulse data is recorded; the first estimate appears after about 12 seconds, with updates during recording.</li>
+          </ol>
+          <p className="text-xs text-muted-foreground">If your finger moves away, recording and estimates pause until it is detected again.</p>
+        </section>
       )}
 
       {/* Video Preview */}

@@ -4,6 +4,7 @@ export class RPPGAcquisition {
     private track: MediaStreamTrack | null = null;
     private sampleCanvas: HTMLCanvasElement | null = null;
     private sampleContext: CanvasRenderingContext2D | null = null;
+    private lastFrameHasFinger = false;
   
     constructor(targetFps: number = 25) {
       this.frameInterval = 1000 / targetFps;
@@ -165,19 +166,34 @@ export class RPPGAcquisition {
       const data = frame.data;
       
       let sumRed = 0;
+      let sumGreen = 0;
+      let sumBlue = 0;
+      let redDominantPixels = 0;
       let count = 0;
   
       for (let i = 0; i < data.length; i += 4) {
         sumRed += data[i]; // Red channel
+        sumGreen += data[i + 1];
+        sumBlue += data[i + 2];
+        if (data[i] > data[i + 1] * 1.12 && data[i] > data[i + 2] * 1.08) redDominantPixels++;
         count++;
       }
-  
-      return count > 0 ? sumRed / count : null;
+
+      if (!count) return null;
+      const avgRed = sumRed / count;
+      const avgGreen = sumGreen / count;
+      const avgBlue = sumBlue / count;
+      // A covered, torch-lit lens produces a bright red field. Requiring both
+      // adequate red intensity and red dominance helps reject an uncovered camera.
+      this.lastFrameHasFinger = avgRed >= 35 && avgRed <= 250 &&
+        avgRed > avgGreen * 1.12 && avgRed > avgBlue * 1.08 &&
+        redDominantPixels / count >= 0.55;
+      return avgRed;
     }
 
     getSignalQuality(avgRed: number): 'saturated' | 'no_contact' | 'ok' {
       if (avgRed > 250) return 'saturated';   // finger pressed too hard / lens overexposed
-      if (avgRed < 30) return 'no_contact';   // no finger detected, or torch off
+      if (avgRed < 30 || !this.lastFrameHasFinger) return 'no_contact';   // no finger detected, or torch off
       return 'ok';
     }
 }

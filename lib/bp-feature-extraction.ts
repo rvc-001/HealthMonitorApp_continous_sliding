@@ -297,10 +297,10 @@ function estimateHrFromAutocorr(
     console.log(`[BP-FEAT ${logPrefix}]   autocorr: bestLag=${bestLag} (${(bestLag/fs).toFixed(3)}s = ${(60*fs/bestLag).toFixed(1)}bpm) corr=${bestCorr.toFixed(3)}`);
   }
 
-  // Threshold lowered to 0.05: even low-confidence autocorr is
-  // more reliable than peak-based HR with dicrotic notch false peaks
+  // Require a coherent repeating pulse before trusting the autocorrelation.
+  // Otherwise the peak-based estimator below is used as a deliberate fallback.
   if (bestLag < 0 || bestCorr < 0.05) {
-    if (logPrefix) console.warn(`[BP-FEAT ${logPrefix}]   autocorr confidence too low (${bestCorr.toFixed(3)}) — using peak fallback`);
+    if (logPrefix) console.info(`[BP-FEAT ${logPrefix}]   autocorrelation confidence=${bestCorr.toFixed(3)} (<0.050); using peak-based HR fallback`);
     return { ppi: NaN, bpm: NaN, confidence: bestCorr };
   }
 

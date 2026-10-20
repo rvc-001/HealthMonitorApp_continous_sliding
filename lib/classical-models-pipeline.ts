@@ -90,14 +90,6 @@ async function getSession(target: 'sbp' | 'dbp' | 'glucose'): Promise<ort.Infere
   throw new Error('Unknown target');
 }
 
-function buildFeatureMap(featureNames: string[], values: Float32Array) {
-  const featureMap: Record<string, number> = {};
-  featureNames.forEach((name, idx) => {
-    featureMap[name] = Number.isFinite(values[idx]) ? values[idx] : 0;
-  });
-  return featureMap;
-}
-
 function meanAbsoluteDiff(a: Float32Array, b: Float32Array) {
   const len = Math.min(a.length, b.length);
   if (len === 0) return 0;
@@ -106,10 +98,6 @@ function meanAbsoluteDiff(a: Float32Array, b: Float32Array) {
     sum += Math.abs(a[i] - b[i]);
   }
   return sum / len;
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
 }
 
 function getSmoothingAlpha(target: TargetName) {
@@ -132,46 +120,6 @@ function getTopInputs(
     .sort((a, b) => b.absValue - a.absValue)
     .slice(0, limit)
     .map(({ name, value }) => ({ name, value }));
-}
-
-function estimateFallbackPrediction(target: TargetName, featureMap: Record<string, number>) {
-  const hr = Number.isFinite(featureMap.hr_est) ? featureMap.hr_est : 72;
-  const ppi = Number.isFinite(featureMap.peak_to_peak_interval) ? featureMap.peak_to_peak_interval : 0.8;
-  const sysAmp = Number.isFinite(featureMap.systolic_amplitude) ? featureMap.systolic_amplitude : 1;
-  const augIdx = Number.isFinite(featureMap.augmentation_index) ? featureMap.augmentation_index : 0;
-  const reflIdx = Number.isFinite(featureMap.reflection_index) ? featureMap.reflection_index : 0.4;
-  const stiff = Number.isFinite(featureMap.stiffness_index) ? featureMap.stiffness_index : 1;
-  const band7 = Number.isFinite(featureMap.band_power_7) ? featureMap.band_power_7 : 0;
-  const centroid = Number.isFinite(featureMap.spectral_centroid) ? featureMap.spectral_centroid : 0;
-  const entropy = Number.isFinite(featureMap.spectral_entropy) ? featureMap.spectral_entropy : 0;
-  const qPurity = Number.isFinite(featureMap.quantum_purity) ? featureMap.quantum_purity : 0.5;
-  const qBlochZ = Number.isFinite(featureMap.quantum_bloch_z_expval) ? featureMap.quantum_bloch_z_expval : 0;
-  const qBlochX = Number.isFinite(featureMap.quantum_bloch_x_expval) ? featureMap.quantum_bloch_x_expval : 0;
-  const pulseProxy = Number.isFinite(featureMap.pulse_pressure_proxy) ? featureMap.pulse_pressure_proxy : ppi * sysAmp;
-
-  if (target === 'sbp') {
-    // Prefer the pulse pressure proxy and vascular stiffness cues when the ONNX
-    // output collapses to a nearly constant value across changing segments.
-    return clamp(
-      92 + 18 * reflIdx + 10 * augIdx + 0.18 * Math.max(hr - 70, 0) + 0.08 * stiff + 0.02 * pulseProxy + 1.2 * band7 + 2.0 * qBlochZ,
-      80,
-      190
-    );
-  }
-
-  if (target === 'dbp') {
-    return clamp(
-      58 + 11 * reflIdx + 6 * augIdx + 0.12 * Math.max(hr - 65, 0) + 0.06 * stiff + 0.015 * pulseProxy,
-      40,
-      130
-    );
-  }
-
-  return clamp(
-    88 + 10 * qPurity + 3.5 * entropy + 1.5 * qBlochX + 0.04 * centroid + 0.08 * Math.max(hr - 70, 0) + 0.03 * stiff,
-    40,
-    300
-  );
 }
 
 export async function preloadClassicalModels() {
@@ -277,8 +225,6 @@ export async function runClassicalInference(target: TargetName, raw_feature: num
   }
 
   {
-    const featureNames2: string[] = Array.isArray(conf.original_feature_names) ? conf.original_feature_names : [];
-    const featureMap2 = buildFeatureMap(featureNames2, clean_raw_feature);
     const selectedFeatureLabels2 = Array.isArray(targetConf.selected_features)
       ? targetConf.selected_features
       : [];
@@ -286,18 +232,18 @@ export async function runClassicalInference(target: TargetName, raw_feature: num
     const inputDelta2 = state2.lastFinalFeatures ? meanAbsoluteDiff(final_features, state2.lastFinalFeatures) : Number.POSITIVE_INFINITY;
     const rawDelta2 = state2.lastRawPrediction === null ? Number.POSITIVE_INFINITY : Math.abs(rawPrediction - state2.lastRawPrediction);
     const isCollapsed2 = state2.lastRawPrediction !== null && state2.lastFinalFeatures !== null && inputDelta2 > 0.15 && rawDelta2 < 0.05;
-    const usedFallback2 = isCollapsed2 && (target === 'sbp' || target === 'glucose');
+    // A hand-written estimate is not a valid substitute for a trained model.
+    // Keep the model result and surface the collapse as a diagnostic instead.
+    const usedFallback2 = false;
     const topInputs2 = getTopInputs(final_features, selectedFeatureLabels2, 3);
-    const fallbackPrediction2 = usedFallback2 ? estimateFallbackPrediction(target, featureMap2) : undefined;
+    const fallbackPrediction2 = undefined;
 
-    if (fallbackPrediction2 !== undefined) {
-      const fallback2 = fallbackPrediction2;
+    if (isCollapsed2) {
       console.warn(
         `[PIPELINE ${target}] Prediction collapsed across changing inputs ` +
         `(inputΔ=${inputDelta2.toFixed(3)}, rawΔ=${rawDelta2.toFixed(3)}). ` +
-        `Using fallback=${fallback2.toFixed(2)} instead of ${prediction.toFixed(2)}`
+        `Keeping ONNX model output=${prediction.toFixed(2)}; inspect model sensitivity and feature scaling.`
       );
-      prediction = fallback2;
     }
 
     const previousDisplayed2 = state2.lastPrediction;
@@ -331,40 +277,4 @@ export async function runClassicalInference(target: TargetName, raw_feature: num
     
     return prediction;
   }
-
-  const featureNames: string[] = Array.isArray(conf.original_feature_names) ? conf.original_feature_names : [];
-  const featureMap = buildFeatureMap(featureNames, clean_raw_feature);
-  const state = inferenceState[target];
-  const prevFinal = state.lastFinalFeatures;
-  const prevPrediction = state.lastPrediction;
-  let inputDelta = Number.POSITIVE_INFINITY;
-  if (prevFinal !== null) {
-    inputDelta = meanAbsoluteDiff(final_features, prevFinal!);
-  }
-  let outputDelta = Number.POSITIVE_INFINITY;
-  if (prevPrediction !== null) {
-    outputDelta = Math.abs(prediction - prevPrediction!);
-  }
-  const isCollapsed = prevPrediction !== null && prevFinal !== null && inputDelta > 0.15 && outputDelta < 0.05;
-
-  if (isCollapsed && (target === 'sbp' || target === 'glucose')) {
-    const fallback = estimateFallbackPrediction(target, featureMap);
-    console.warn(
-      `[PIPELINE ${target}] Prediction collapsed across changing inputs ` +
-      `(inputΔ=${inputDelta.toFixed(3)}, outputΔ=${outputDelta.toFixed(3)}). ` +
-      `Using fallback=${fallback.toFixed(2)} instead of ${prediction.toFixed(2)}`
-    );
-    prediction = fallback;
-  }
-
-  state.lastPrediction = prediction;
-  state.lastFinalFeatures = new Float32Array(final_features);
-
-  console.log(`[PIPELINE ${target}] 1. Input Base (72):`, Array.from(clean_raw_feature.slice(0, 5)).map(v => v.toFixed(3)) + '...');
-  console.log(`[PIPELINE ${target}] 2. Standardized (72):`, Array.from(standardized_base.slice(0, 5)).map(v => v.toFixed(3)) + '...');
-  console.log(`[PIPELINE ${target}] 3. Polynomial (15):`, Array.from(polynomial_features).map(v => v.toFixed(3)));
-  console.log(`[PIPELINE ${target}] 4. Final ONNX Input (15):`, Array.from(final_features).map(v => v.toFixed(3)));
-  console.log(`[PIPELINE ${target}] 5. Raw Prediction: ${rawPrediction.toFixed(4)}, Final Scaled: ${prediction.toFixed(2)}`);
-  
-  return prediction;
 }
