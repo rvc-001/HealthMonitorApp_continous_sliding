@@ -105,6 +105,9 @@ export default function RecordingTab() {
       document.removeEventListener('visibilitychange', resumeCamera);
       window.removeEventListener('focus', resumeCamera);
       cleanupTokenRef.current++;
+      // Allow a Strict Mode remount to start its own request while the previous
+      // getUserMedia call is still settling. Its token will invalidate that call.
+      cameraInitInProgressRef.current = false;
       stopCamera();
     };
   }, []);
