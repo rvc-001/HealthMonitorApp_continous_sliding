@@ -101,9 +101,24 @@ export default function RecordingTab() {
     };
     document.addEventListener('visibilitychange', resumeCamera);
     window.addEventListener('focus', resumeCamera);
+    const startCameraFromInteraction = () => {
+      window.removeEventListener('pointerdown', startCameraFromInteraction, true);
+      window.removeEventListener('touchend', startCameraFromInteraction, true);
+      const video = videoRef.current;
+      const stream = video?.srcObject as MediaStream | null;
+      const hasLiveTrack = stream?.getVideoTracks().some((track) => track.readyState === 'live');
+      if (!video || !hasLiveTrack || video.paused || video.readyState < 2) {
+        // iOS Safari may defer camera/video startup until a real user gesture.
+        initCamera(true);
+      }
+    };
+    window.addEventListener('pointerdown', startCameraFromInteraction, true);
+    window.addEventListener('touchend', startCameraFromInteraction, true);
     return () => {
       document.removeEventListener('visibilitychange', resumeCamera);
       window.removeEventListener('focus', resumeCamera);
+      window.removeEventListener('pointerdown', startCameraFromInteraction, true);
+      window.removeEventListener('touchend', startCameraFromInteraction, true);
       cleanupTokenRef.current++;
       // Allow a Strict Mode remount to start its own request while the previous
       // getUserMedia call is still settling. Its token will invalidate that call.
@@ -112,16 +127,17 @@ export default function RecordingTab() {
     };
   }, []);
 
-  const initCamera = async () => {
-    if (cameraInitInProgressRef.current) return;
+  const initCamera = async (force = false) => {
+    if (cameraInitInProgressRef.current && !force) return;
     cameraInitInProgressRef.current = true;
     const myToken = ++cameraInitTokenRef.current;
     try {
       setIsCameraStarting(true);
       setCameraError(null);
       setStatusMsg("Starting…");
-      rpPgRef.current = new RPPGAcquisition(SAMPLE_RATE);
-      const stream = await rpPgRef.current.requestCameraPermission();
+      const acquisition = new RPPGAcquisition(SAMPLE_RATE);
+      rpPgRef.current = acquisition;
+      const stream = await acquisition.requestCameraPermission();
       if (cameraInitTokenRef.current !== myToken) {
         // A newer init started (or we unmounted) while awaiting permission.
         stream.getTracks().forEach((t: MediaStreamTrack) => t.stop());
@@ -131,6 +147,9 @@ export default function RecordingTab() {
         const v = videoRef.current;
         // Reset element state in case a previous init was interrupted.
         v.pause();
+        v.muted = true;
+        v.playsInline = true;
+        v.setAttribute('webkit-playsinline', '');
         v.srcObject = null;
         v.srcObject = stream;
 
@@ -166,6 +185,7 @@ export default function RecordingTab() {
         }, 800);
       }
     } catch (e) {
+      if (cameraInitTokenRef.current !== myToken) return;
       console.error("Camera init failed", e);
       setStatusMsg("Camera Error");
       const errName = (e as any)?.name as string | undefined;
@@ -177,8 +197,10 @@ export default function RecordingTab() {
         setCameraError("The camera could not be started. Please retry.");
       }
     } finally {
-      cameraInitInProgressRef.current = false;
-      setIsCameraStarting(false);
+      if (cameraInitTokenRef.current === myToken) {
+        cameraInitInProgressRef.current = false;
+        setIsCameraStarting(false);
+      }
     }
   };
 
