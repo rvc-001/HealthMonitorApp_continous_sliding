@@ -230,11 +230,18 @@ export default function RecordingTab() {
       const val = rpPgRef.current.extractSignal(videoRef.current);
       if (val !== null) {
         const now = Date.now();
+        const quality = rpPgRef.current.getSignalQuality(val);
 
         // ── WARM-UP PHASE ──
         if (warmUpStartRef.current && (now - warmUpStartRef.current < 5000)) {
           const remaining = Math.ceil(5 - (now - warmUpStartRef.current) / 1000);
-          setStatusMsg(`Rest correctly, recording not started... ${remaining}s`);
+          // Keep checking contact during warm-up too. The camera preview can be
+          // active without a finger, but those frames must never look like PPG.
+          setStatusMsg(quality === 'ok'
+            ? `Finger detected — settling... ${remaining}s`
+            : quality === 'saturated'
+              ? 'Too much pressure / overexposed'
+              : 'Finger not detected — cover the camera and flash');
           
           if (now - lastUiUpdateRef.current >= UI_UPDATE_INTERVAL_MS) {
             lastUiUpdateRef.current = now;
@@ -250,8 +257,6 @@ export default function RecordingTab() {
 
 
         if (recordedSamplesRef.current.length < MAX_RECORDING_SAMPLES) {
-          const quality = rpPgRef.current.getSignalQuality(val);
-
           if (quality === 'saturated') {
             setStatusMsg("Too much pressure / overexposed");
             recordedSamplesRef.current = [];
