@@ -56,6 +56,7 @@ export default function RecordingTab() {
   const visualBufferRef = useRef<number[]>([]);
   const lastUiUpdateRef = useRef(0);
   const cameraInitTokenRef = useRef(0);
+  const cameraInitInProgressRef = useRef(false);
   const bpSegmentWindowStartRef = useRef<number | null>(null);
   
   // Wall-clock timestamp when the LAST analysis was triggered
@@ -78,13 +79,39 @@ export default function RecordingTab() {
     initCamera();
     // Pre-warm BP ONNX sessions in background so they are ready for first segment
     preloadClassicalModels();
+    // Browsers may defer or suspend camera startup while the page is loading or
+    // in a background tab. Recover the preview as soon as the page is active.
+    const resumeCamera = () => {
+      if (document.visibilityState !== 'visible' || cameraInitInProgressRef.current) return;
+      const video = videoRef.current;
+      const stream = video?.srcObject as MediaStream | null;
+      const hasLiveTrack = stream?.getVideoTracks().some((track) => track.readyState === 'live');
+
+      if (!video || !hasLiveTrack) {
+        initCamera();
+        return;
+      }
+
+      if (video.paused || video.readyState < 2) {
+        void video.play().catch((error) => {
+          console.warn('Camera preview resume failed; restarting camera', error);
+          initCamera();
+        });
+      }
+    };
+    document.addEventListener('visibilitychange', resumeCamera);
+    window.addEventListener('focus', resumeCamera);
     return () => {
+      document.removeEventListener('visibilitychange', resumeCamera);
+      window.removeEventListener('focus', resumeCamera);
       cleanupTokenRef.current++;
       stopCamera();
     };
   }, []);
 
   const initCamera = async () => {
+    if (cameraInitInProgressRef.current) return;
+    cameraInitInProgressRef.current = true;
     const myToken = ++cameraInitTokenRef.current;
     try {
       setIsCameraStarting(true);
@@ -147,6 +174,7 @@ export default function RecordingTab() {
         setCameraError("The camera could not be started. Please retry.");
       }
     } finally {
+      cameraInitInProgressRef.current = false;
       setIsCameraStarting(false);
     }
   };
